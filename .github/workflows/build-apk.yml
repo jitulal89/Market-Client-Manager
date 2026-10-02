@@ -23,7 +23,7 @@ jobs:
           rm -rf extracted
           mkdir -p extracted
 
-          unzip -q "Market Client Manager.zip" -d extracted
+          unzip -q "MarketClientManager.zip" -d extracted
 
           echo "ZIP extracted successfully"
           find extracted -maxdepth 3 -type f | head -100
