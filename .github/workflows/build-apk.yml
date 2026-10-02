@@ -1,40 +1,237 @@
+name: Build Market Client Manager APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # =========================================================
+      # 1. Checkout GitHub repository
+      # =========================================================
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+
+      # =========================================================
+      # 2. Set up Java 17
+      # =========================================================
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+
+      # =========================================================
+      # 3. Extract the specific ZIP
+      # =========================================================
+      - name: Extract Market Client Manager v2.1.3
+        id: project
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "MARKET CLIENT MANAGER v2.1.3"
+          echo "=============================================="
+
+          ZIP_FILE="MarketClientManager_v2.1.3.zip"
+
+          echo ""
+          echo "Looking for:"
+          echo "$ZIP_FILE"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo ""
+            echo "ERROR: $ZIP_FILE was not found in repository root."
+            echo ""
+            echo "Available ZIP files:"
+            find . \
+              -maxdepth 3 \
+              -type f \
+              -name "*.zip" \
+              -not -path './.git/*' \
+              | sort
+
+            exit 1
+          fi
+
+          echo ""
+          echo "ZIP found:"
+          ls -lh "$ZIP_FILE"
+
+          echo ""
+          echo "Extracting ZIP..."
+
+          rm -rf extracted-project
+          mkdir -p extracted-project
+
+          unzip -q "$ZIP_FILE" -d extracted-project
+
+          echo ""
+          echo "ZIP extraction completed."
+
+
+          # =====================================================
+          # Find Android project inside ZIP
+          # =====================================================
+
+          PROJECT_DIR=$(find extracted-project \
+            -type f \
+            -name "settings.gradle" \
+            -print -quit \
+            | xargs -r dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+
+            echo ""
+            echo "ERROR: settings.gradle was not found inside ZIP."
+
+            echo ""
+            echo "Extracted files:"
+            find extracted-project \
+              -maxdepth 8 \
+              -type f \
+              | sort
+
+            exit 1
+
+          fi
+
+          echo ""
+          echo "=============================================="
+          echo "ANDROID PROJECT FOUND"
+          echo "=============================================="
+
+          echo "$PROJECT_DIR"
+
+          echo ""
+          echo "Project contents:"
+          ls -la "$PROJECT_DIR"
+
+          echo ""
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+
+      # =========================================================
+      # 4. Validate Android project
+      # =========================================================
+      - name: Validate Android project
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "VALIDATING ANDROID PROJECT"
+          echo "=============================================="
+
+          echo ""
+          echo "Current directory:"
+          pwd
+
+          echo ""
+          echo "Project files:"
+          ls -la
+
+          echo ""
+          echo "Checking required files..."
+
+          test -f settings.gradle
+          test -f build.gradle
+          test -f gradle.properties
+          test -d app
+          test -f app/build.gradle
+
+          echo ""
+          echo "Required files found."
+
+          echo ""
+          echo "App directory:"
+          ls -la app
+
+          echo ""
+          echo "Android project validation successful."
+
+
+      # =========================================================
+      # 5. Configure Android SDK
+      #
+      # IMPORTANT:
+      # Do NOT use android-actions/setup-android.
+      # Do NOT chmod sdkmanager.
+      # =========================================================
       - name: Configure Android SDK
         shell: bash
         run: |
 
-          echo "========================================"
-          echo "Android SDK"
-          echo "========================================"
+          set -e
 
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "=============================================="
+          echo "CONFIGURING ANDROID SDK"
+          echo "=============================================="
+
+          echo ""
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
 
           if [ -z "$ANDROID_HOME" ]; then
             echo "ERROR: ANDROID_HOME is not set."
             exit 1
           fi
 
+
+          # -------------------------------------------------------
+          # Locate sdkmanager
+          # -------------------------------------------------------
+
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
           if [ ! -x "$SDKMANAGER" ]; then
-            echo "Latest sdkmanager not available. Searching..."
+
+            echo ""
+            echo "Latest sdkmanager not found."
+            echo "Searching for available sdkmanager..."
 
             SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
               -name sdkmanager \
               -type f \
               -perm -111 \
+              2>/dev/null \
               | sort \
               | tail -1)
+
           fi
 
+
           if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+
+            echo ""
             echo "ERROR: Executable sdkmanager not found."
-            find "$ANDROID_HOME/cmdline-tools" \
+
+            echo ""
+            echo "Available sdkmanager files:"
+            find "$ANDROID_HOME" \
               -name sdkmanager \
               -type f \
               2>/dev/null || true
+
             exit 1
+
           fi
 
+
+          echo ""
           echo "Using sdkmanager:"
           echo "$SDKMANAGER"
 
@@ -42,18 +239,227 @@
           echo "sdkmanager version:"
           "$SDKMANAGER" --version
 
+
+          # -------------------------------------------------------
+          # Accept licenses
+          # -------------------------------------------------------
+
           echo ""
           echo "Accepting Android SDK licenses..."
 
           yes | "$SDKMANAGER" --licenses >/dev/null || true
 
-          echo ""
-          echo "Installing required Android SDK packages..."
 
-          "$SDKMANAGER" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          # -------------------------------------------------------
+          # Android Platform 35
+          # -------------------------------------------------------
 
           echo ""
-          echo "Android SDK is ready."
+          echo "Checking Android Platform 35..."
+
+          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
+
+            echo "Installing Android Platform 35..."
+
+            "$SDKMANAGER" "platforms;android-35"
+
+          else
+
+            echo "Android Platform 35 already installed."
+
+          fi
+
+
+          # -------------------------------------------------------
+          # Build Tools 35.0.0
+          # -------------------------------------------------------
+
+          echo ""
+          echo "Checking Android Build Tools 35.0.0..."
+
+          if [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
+
+            echo "Installing Build Tools 35.0.0..."
+
+            "$SDKMANAGER" "build-tools;35.0.0"
+
+          else
+
+            echo "Build Tools 35.0.0 already installed."
+
+          fi
+
+
+          # -------------------------------------------------------
+          # Platform Tools
+          # -------------------------------------------------------
+
+          echo ""
+          echo "Checking Platform Tools..."
+
+          if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
+
+            echo "Installing Platform Tools..."
+
+            "$SDKMANAGER" "platform-tools"
+
+          else
+
+            echo "Platform Tools already installed."
+
+          fi
+
+
+          echo ""
+          echo "=============================================="
+          echo "ANDROID SDK READY"
+          echo "=============================================="
+
+
+      # =========================================================
+      # 6. Set up Gradle 8.9
+      # =========================================================
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+
+      # =========================================================
+      # 7. Check build environment
+      # =========================================================
+      - name: Check build environment
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "BUILD ENVIRONMENT"
+          echo "=============================================="
+
+          echo ""
+          echo "Java:"
+          java -version
+
+          echo ""
+          echo "Gradle:"
+          gradle --version
+
+          echo ""
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
+
+          echo ""
+          echo "Android platforms:"
+          ls -la "$ANDROID_HOME/platforms" || true
+
+          echo ""
+          echo "Android build tools:"
+          ls -la "$ANDROID_HOME/build-tools" || true
+
+          echo ""
+          echo "Build environment ready."
+
+
+      # =========================================================
+      # 8. Build Debug APK
+      # =========================================================
+      - name: Build Debug APK
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "BUILDING MARKET CLIENT MANAGER"
+          echo "=============================================="
+
+          echo ""
+          echo "Project:"
+          pwd
+
+          echo ""
+          echo "Starting Gradle build..."
+
+          gradle :app:assembleDebug \
+            --no-daemon \
+            --stacktrace
+
+          echo ""
+          echo "Gradle build completed successfully."
+
+
+      # =========================================================
+      # 9. Verify APK
+      # =========================================================
+      - name: Verify APK
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "=============================================="
+          echo "VERIFYING APK"
+          echo "=============================================="
+
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+
+          echo ""
+          echo "Checking:"
+          echo "$APK_PATH"
+
+          if [ ! -f "$APK_PATH" ]; then
+
+            echo ""
+            echo "ERROR: APK was not generated."
+
+            echo ""
+            echo "Available build output:"
+            find app/build/outputs \
+              -maxdepth 6 \
+              -type f \
+              2>/dev/null || true
+
+            exit 1
+
+          fi
+
+          echo ""
+          echo "APK generated:"
+          ls -lh "$APK_PATH"
+
+
+      # =========================================================
+      # 10. Rename APK
+      # =========================================================
+      - name: Rename APK
+        working-directory: ${{ steps.project.outputs.project_dir }}
+        shell: bash
+        run: |
+
+          set -e
+
+          cp \
+            app/build/outputs/apk/debug/app-debug.apk \
+            "$GITHUB_WORKSPACE/MarketClientManager-v2.1.3-debug.apk"
+
+          echo ""
+          echo "APK renamed to:"
+          echo "MarketClientManager-v2.1.3-debug.apk"
+
+          ls -lh \
+            "$GITHUB_WORKSPACE/MarketClientManager-v2.1.3-debug.apk"
+
+
+      # =========================================================
+      # 11. Upload APK as GitHub Artifact
+      # =========================================================
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MarketClientManager-v2.1.3-debug
+          path: MarketClientManager-v2.1.3-debug.apk
+          if-no-files-found: error
