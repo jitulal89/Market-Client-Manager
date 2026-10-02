@@ -31,7 +31,7 @@ jobs:
 
 
       # =========================================================
-      # 3. Extract EXACT v2.1.6 ZIP
+      # 3. Extract EXACT v2.1.7 ZIP
       # =========================================================
       - name: Extract Market Client Manager v2.1.6
         id: project
@@ -41,10 +41,10 @@ jobs:
           set -e
 
           echo "=============================================="
-          echo "MARKET CLIENT MANAGER v2.1.6"
+          echo "MARKET CLIENT MANAGER v2.1.7"
           echo "=============================================="
 
-          ZIP_FILE="MarketClientManager_v2.1.6.zip"
+          ZIP_FILE="MarketClientManager_v2.1.7.zip"
 
           echo ""
           echo "Looking for:"
