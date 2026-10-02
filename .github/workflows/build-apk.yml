@@ -18,7 +18,7 @@ jobs:
       - name: Unzip Market Client Manager
         run: |
           mkdir -p extracted
-          unzip -q "Market Client Manager.zip" -d extracted
+          unzip -q "MarketClientManager.zip" -d extracted
 
       - name: Locate Android project
         run: |
