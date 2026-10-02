@@ -24,11 +24,11 @@ jobs:
       # ---------------------------------------------------------
       # 2. Unzip the exact ZIP uploaded to GitHub
       # ---------------------------------------------------------
-      - name: Unzip MarketClientManager
+      - name: Unzip MarketClientManager_v2.1.1
         run: |
           echo "Looking for MarketClientManager.zip..."
 
-          if [ ! -f "MarketClientManager.zip" ]; then
+          if [ ! -f "MarketClientManager_v2.1.1.zip" ]; then
             echo "ERROR: Market Client Manager.zip not found"
             echo "Files in repository:"
             ls -la
@@ -38,7 +38,7 @@ jobs:
           rm -rf extracted
           mkdir -p extracted
 
-          unzip -q "MarketClientManager.zip" -d extracted
+          unzip -q "MarketClientManager_v2.1.1.zip" -d extracted
 
           echo "ZIP extracted successfully."
 
