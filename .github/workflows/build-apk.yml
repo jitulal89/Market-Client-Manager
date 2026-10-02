@@ -9,110 +9,217 @@ on:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
 
+      # ---------------------------------------------------------
       # 1. Checkout repository
+      # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Unzip the exact ZIP file
-      - name: Unzip MarketClient Manager
+
+      # ---------------------------------------------------------
+      # 2. Unzip the exact ZIP uploaded to GitHub
+      # ---------------------------------------------------------
+      - name: Unzip Market Client Manager
         run: |
+          echo "Looking for Market Client Manager.zip..."
+
+          if [ ! -f "Market Client Manager.zip" ]; then
+            echo "ERROR: Market Client Manager.zip not found"
+            echo "Files in repository:"
+            ls -la
+            exit 1
+          fi
+
           rm -rf extracted
           mkdir -p extracted
 
           unzip -q "MarketClientManager.zip" -d extracted
 
-          echo "ZIP extracted successfully"
-          find extracted -maxdepth 3 -type f | head -100
+          echo "ZIP extracted successfully."
 
-      # 3. Locate Android project
+
+      # ---------------------------------------------------------
+      # 3. Locate Android project inside ZIP
+      # ---------------------------------------------------------
       - name: Locate Android project
         run: |
-          PROJECT_DIR=$(find extracted \
-            \( -name settings.gradle -o -name settings.gradle.kts \) \
-            -type f | head -n 1)
+          echo "Searching for Android project..."
 
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: settings.gradle not found inside ZIP"
+          SETTINGS_FILE=$(find extracted \
+            -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            | head -n 1)
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: settings.gradle not found."
+            echo "Extracted files:"
+            find extracted -maxdepth 4 -type f | head -200
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$PROJECT_DIR")
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
 
-          echo "Android project found at:"
+          echo "Android project found:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
+          echo ""
+          echo "Project contents:"
+          ls -la "$PROJECT_DIR"
+
+
+      # ---------------------------------------------------------
       # 4. Set up Java 17
+      # ---------------------------------------------------------
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
           cache: gradle
 
+
+      # ---------------------------------------------------------
       # 5. Configure Android SDK
+      # ---------------------------------------------------------
       - name: Configure Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
-            -name sdkmanager \
-            -type f | head -n 1)
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
-            find "$ANDROID_HOME" -maxdepth 5 -type f -name sdkmanager
+          echo ""
+          echo "Checking sdkmanager..."
+
+          if [ ! -f "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found at:"
+            echo "$SDKMANAGER"
+
+            echo ""
+            echo "Searching for sdkmanager:"
+            find "$ANDROID_HOME" -type f -name "sdkmanager" 2>/dev/null || true
+
             exit 1
           fi
 
-          echo "sdkmanager found at:"
+          echo "sdkmanager found:"
           echo "$SDKMANAGER"
 
-          chmod +x "$SDKMANAGER"
+          echo ""
+          echo "sdkmanager version:"
+          "$SDKMANAGER" --version
+
+          echo ""
+          echo "Accepting Android SDK licenses..."
 
           yes | "$SDKMANAGER" --licenses || true
+
+          echo ""
+          echo "Installing required Android SDK packages..."
 
           "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
+          echo ""
+          echo "Android SDK setup completed."
+
+
+      # ---------------------------------------------------------
       # 6. Set up Gradle 8.9
+      # ---------------------------------------------------------
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.9
+          gradle-version: "8.9"
 
-      # 7. Build APK
+
+      # ---------------------------------------------------------
+      # 7. Show Gradle / Java versions
+      # ---------------------------------------------------------
+      - name: Check build environment
+        run: |
+          echo "Java:"
+          java -version
+
+          echo ""
+          echo "Gradle:"
+          gradle --version
+
+          echo ""
+          echo "Android SDK:"
+          echo "$ANDROID_HOME"
+
+
+      # ---------------------------------------------------------
+      # 8. Build Debug APK
+      # ---------------------------------------------------------
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          echo "Building Market Client Manager..."
-          gradle :app:assembleDebug --no-daemon --stacktrace
+          echo "======================================"
+          echo "Building Market Client Manager APK"
+          echo "======================================"
 
-      # 8. Check generated APK
+          gradle :app:assembleDebug \
+            --no-daemon \
+            --stacktrace
+
+          echo ""
+          echo "Build completed."
+
+
+      # ---------------------------------------------------------
+      # 9. Check generated APK
+      # ---------------------------------------------------------
       - name: Check APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          echo "Generated APK:"
-          ls -lh app/build/outputs/apk/debug/
+          echo "Checking APK output..."
 
-      # 9. Copy APK to root
+          if [ ! -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "ERROR: APK was not generated."
+
+            echo ""
+            echo "Available build files:"
+            find app/build -type f 2>/dev/null || true
+
+            exit 1
+          fi
+
+          echo ""
+          echo "APK successfully generated:"
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+
+
+      # ---------------------------------------------------------
+      # 10. Rename APK
+      # ---------------------------------------------------------
       - name: Prepare APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk \
-             "${GITHUB_WORKSPACE}/MarketClientManager.apk"
+          cp \
+            "app/build/outputs/apk/debug/app-debug.apk" \
+            "${GITHUB_WORKSPACE}/MarketClientManager.apk"
 
-      # 10. Upload APK
+          echo "APK prepared:"
+          ls -lh "${GITHUB_WORKSPACE}/MarketClientManager.apk"
+
+
+      # ---------------------------------------------------------
+      # 11. Upload APK to GitHub Actions
+      # ---------------------------------------------------------
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MarketClientManager-APK
           path: MarketClientManager.apk
+          if-no-files-found: error
