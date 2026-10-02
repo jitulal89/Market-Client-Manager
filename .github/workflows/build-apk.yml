@@ -14,14 +14,14 @@ jobs:
     steps:
 
       # =========================================================
-      # 1. Checkout GitHub repository
+      # 1. Checkout repository
       # =========================================================
       - name: Checkout source code
         uses: actions/checkout@v4
 
 
       # =========================================================
-      # 2. Set up Java 17
+      # 2. Java 17
       # =========================================================
       - name: Set up Java 17
         uses: actions/setup-java@v5
@@ -31,7 +31,7 @@ jobs:
 
 
       # =========================================================
-      # 3. Extract the specific ZIP
+      # 3. Extract EXACT v2.1.3 ZIP
       # =========================================================
       - name: Extract Market Client Manager v2.1.3
         id: project
@@ -51,10 +51,13 @@ jobs:
           echo "$ZIP_FILE"
 
           if [ ! -f "$ZIP_FILE" ]; then
+
             echo ""
-            echo "ERROR: $ZIP_FILE was not found in repository root."
+            echo "ERROR: $ZIP_FILE was not found."
+
             echo ""
             echo "Available ZIP files:"
+
             find . \
               -maxdepth 3 \
               -type f \
@@ -70,7 +73,7 @@ jobs:
           ls -lh "$ZIP_FILE"
 
           echo ""
-          echo "Extracting ZIP..."
+          echo "Extracting..."
 
           rm -rf extracted-project
           mkdir -p extracted-project
@@ -81,9 +84,9 @@ jobs:
           echo "ZIP extraction completed."
 
 
-          # =====================================================
-          # Find Android project inside ZIP
-          # =====================================================
+          # -------------------------------------------------------
+          # Find Android project
+          # -------------------------------------------------------
 
           PROJECT_DIR=$(find extracted-project \
             -type f \
@@ -98,14 +101,15 @@ jobs:
 
             echo ""
             echo "Extracted files:"
+
             find extracted-project \
               -maxdepth 8 \
               -type f \
               | sort
 
             exit 1
-
           fi
+
 
           echo ""
           echo "=============================================="
@@ -113,10 +117,6 @@ jobs:
           echo "=============================================="
 
           echo "$PROJECT_DIR"
-
-          echo ""
-          echo "Project contents:"
-          ls -la "$PROJECT_DIR"
 
           echo ""
           echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
@@ -137,12 +137,8 @@ jobs:
           echo "=============================================="
 
           echo ""
-          echo "Current directory:"
+          echo "Project:"
           pwd
-
-          echo ""
-          echo "Project files:"
-          ls -la
 
           echo ""
           echo "Checking required files..."
@@ -154,11 +150,7 @@ jobs:
           test -f app/build.gradle
 
           echo ""
-          echo "Required files found."
-
-          echo ""
-          echo "App directory:"
-          ls -la app
+          echo "All required project files found."
 
           echo ""
           echo "Android project validation successful."
@@ -168,8 +160,8 @@ jobs:
       # 5. Configure Android SDK
       #
       # IMPORTANT:
-      # Do NOT use android-actions/setup-android.
-      # Do NOT chmod sdkmanager.
+      # No android-actions/setup-android
+      # No chmod
       # =========================================================
       - name: Configure Android SDK
         shell: bash
@@ -200,8 +192,7 @@ jobs:
           if [ ! -x "$SDKMANAGER" ]; then
 
             echo ""
-            echo "Latest sdkmanager not found."
-            echo "Searching for available sdkmanager..."
+            echo "Searching for sdkmanager..."
 
             SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
               -name sdkmanager \
@@ -217,17 +208,14 @@ jobs:
           if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
 
             echo ""
-            echo "ERROR: Executable sdkmanager not found."
+            echo "ERROR: sdkmanager not found."
 
-            echo ""
-            echo "Available sdkmanager files:"
             find "$ANDROID_HOME" \
               -name sdkmanager \
               -type f \
               2>/dev/null || true
 
             exit 1
-
           fi
 
 
@@ -237,6 +225,7 @@ jobs:
 
           echo ""
           echo "sdkmanager version:"
+
           "$SDKMANAGER" --version
 
 
@@ -251,73 +240,24 @@ jobs:
 
 
           # -------------------------------------------------------
-          # Android Platform 35
+          # Install required components
           # -------------------------------------------------------
 
           echo ""
-          echo "Checking Android Platform 35..."
+          echo "Installing/checking Android SDK components..."
 
-          if [ ! -d "$ANDROID_HOME/platforms/android-35" ]; then
-
-            echo "Installing Android Platform 35..."
-
-            "$SDKMANAGER" "platforms;android-35"
-
-          else
-
-            echo "Android Platform 35 already installed."
-
-          fi
-
-
-          # -------------------------------------------------------
-          # Build Tools 35.0.0
-          # -------------------------------------------------------
-
-          echo ""
-          echo "Checking Android Build Tools 35.0.0..."
-
-          if [ ! -d "$ANDROID_HOME/build-tools/35.0.0" ]; then
-
-            echo "Installing Build Tools 35.0.0..."
-
-            "$SDKMANAGER" "build-tools;35.0.0"
-
-          else
-
-            echo "Build Tools 35.0.0 already installed."
-
-          fi
-
-
-          # -------------------------------------------------------
-          # Platform Tools
-          # -------------------------------------------------------
-
-          echo ""
-          echo "Checking Platform Tools..."
-
-          if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
-
-            echo "Installing Platform Tools..."
-
-            "$SDKMANAGER" "platform-tools"
-
-          else
-
-            echo "Platform Tools already installed."
-
-          fi
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
 
           echo ""
-          echo "=============================================="
-          echo "ANDROID SDK READY"
-          echo "=============================================="
+          echo "Android SDK ready."
 
 
       # =========================================================
-      # 6. Set up Gradle 8.9
+      # 6. Gradle 8.9
       # =========================================================
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -326,7 +266,7 @@ jobs:
 
 
       # =========================================================
-      # 7. Check build environment
+      # 7. Verify build environment
       # =========================================================
       - name: Check build environment
         shell: bash
@@ -347,23 +287,25 @@ jobs:
           gradle --version
 
           echo ""
-          echo "ANDROID_HOME:"
+          echo "Android SDK:"
           echo "$ANDROID_HOME"
 
           echo ""
-          echo "Android platforms:"
-          ls -la "$ANDROID_HOME/platforms" || true
+          echo "Checking Android 35..."
+
+          test -d "$ANDROID_HOME/platforms/android-35"
 
           echo ""
-          echo "Android build tools:"
-          ls -la "$ANDROID_HOME/build-tools" || true
+          echo "Checking Build Tools..."
+
+          test -d "$ANDROID_HOME/build-tools/35.0.0"
 
           echo ""
-          echo "Build environment ready."
+          echo "Build environment is ready."
 
 
       # =========================================================
-      # 8. Build Debug APK
+      # 8. Build APK
       # =========================================================
       - name: Build Debug APK
         working-directory: ${{ steps.project.outputs.project_dir }}
@@ -373,22 +315,15 @@ jobs:
           set -e
 
           echo "=============================================="
-          echo "BUILDING MARKET CLIENT MANAGER"
+          echo "BUILDING APK"
           echo "=============================================="
-
-          echo ""
-          echo "Project:"
-          pwd
-
-          echo ""
-          echo "Starting Gradle build..."
 
           gradle :app:assembleDebug \
             --no-daemon \
             --stacktrace
 
           echo ""
-          echo "Gradle build completed successfully."
+          echo "Gradle build completed."
 
 
       # =========================================================
@@ -401,13 +336,8 @@ jobs:
 
           set -e
 
-          echo "=============================================="
-          echo "VERIFYING APK"
-          echo "=============================================="
-
           APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
 
-          echo ""
           echo "Checking:"
           echo "$APK_PATH"
 
@@ -416,19 +346,17 @@ jobs:
             echo ""
             echo "ERROR: APK was not generated."
 
-            echo ""
-            echo "Available build output:"
             find app/build/outputs \
               -maxdepth 6 \
               -type f \
               2>/dev/null || true
 
             exit 1
-
           fi
 
           echo ""
-          echo "APK generated:"
+          echo "APK successfully generated."
+
           ls -lh "$APK_PATH"
 
 
@@ -447,15 +375,13 @@ jobs:
             "$GITHUB_WORKSPACE/MarketClientManager-v2.1.3-debug.apk"
 
           echo ""
-          echo "APK renamed to:"
-          echo "MarketClientManager-v2.1.3-debug.apk"
-
+          echo "APK:"
           ls -lh \
             "$GITHUB_WORKSPACE/MarketClientManager-v2.1.3-debug.apk"
 
 
       # =========================================================
-      # 11. Upload APK as GitHub Artifact
+      # 11. Upload APK
       # =========================================================
       - name: Upload APK
         uses: actions/upload-artifact@v4
