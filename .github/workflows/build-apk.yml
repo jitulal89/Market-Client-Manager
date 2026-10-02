@@ -23,12 +23,12 @@ jobs:
           rm -rf extracted
           mkdir -p extracted
 
-          unzip -q "MarketClientManager.zip" -d extracted
+          unzip -q "Market Client Manager.zip" -d extracted
 
           echo "ZIP extracted successfully"
           find extracted -maxdepth 3 -type f | head -100
 
-      # 3. Find Android project
+      # 3. Locate Android project
       - name: Locate Android project
         run: |
           PROJECT_DIR=$(find extracted \
@@ -42,7 +42,7 @@ jobs:
 
           PROJECT_DIR=$(dirname "$PROJECT_DIR")
 
-          echo "Android project found:"
+          echo "Android project found at:"
           echo "$PROJECT_DIR"
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
@@ -55,15 +55,30 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      # 5. Configure existing Android SDK
+      # 5. Configure Android SDK
       - name: Configure Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          yes | sdkmanager --licenses || true
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -name sdkmanager \
+            -type f | head -n 1)
 
-          sdkmanager \
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found"
+            find "$ANDROID_HOME" -maxdepth 5 -type f -name sdkmanager
+            exit 1
+          fi
+
+          echo "sdkmanager found at:"
+          echo "$SDKMANAGER"
+
+          chmod +x "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
@@ -78,16 +93,17 @@ jobs:
       - name: Build Debug APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          echo "Building Android APK..."
+          echo "Building Market Client Manager..."
           gradle :app:assembleDebug --no-daemon --stacktrace
 
-      # 8. Check APK
+      # 8. Check generated APK
       - name: Check APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
+          echo "Generated APK:"
           ls -lh app/build/outputs/apk/debug/
 
-      # 9. Rename APK
+      # 9. Copy APK to root
       - name: Prepare APK
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
